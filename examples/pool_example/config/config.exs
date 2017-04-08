@@ -3,9 +3,9 @@
 use Mix.Config
 
 config :pool_example, PoolExample,
-  host: "192.168.252.128",
+  host: "127.0.0.1",
   port: 7687,
-  auth: {},
+  auth: {"neo4j", "password"},
   pool: DBConnection.Poolboy,
   name: :boltex_pool
 

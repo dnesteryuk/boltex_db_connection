@@ -4,6 +4,10 @@ defmodule BoltexDBConnection.Connection do
 
   Heavily inspired by
   https://github.com/elixir-ecto/db_connection/tree/master/examples/tcp_connection
+
+  The launched gen server keeps a tuple as a state.
+  That tuple keeps an open connection as a first element and a socket
+  interface as a second element.
   """
 
   use DBConnection
@@ -17,18 +21,19 @@ defmodule BoltexDBConnection.Connection do
     port        = Keyword.fetch!(opts, :port)
     auth        = Keyword.fetch!(opts, :auth)
 
+    socket      = Keyword.get(opts, :socket, BoltexDBConnection.Socket)
     socket_opts = Keyword.get(opts, :socket_options, [])
     timeout     = Keyword.get(opts, :connect_timeout, 5_000)
 
     enforced_opts = [packet: :raw, mode: :binary, active: false]
     socket_opts   = Enum.reverse socket_opts, enforced_opts
 
-    with {:ok, port} <- :gen_tcp.connect(host, port, socket_opts, timeout),
-         :ok         <- Bolt.handshake(:gen_tcp, port),
-         :ok         <- Bolt.init(:gen_tcp, port, auth),
-         :ok         <- :inet.setopts(port, active: :once)
+    with {:ok, sock} <- socket.connect(host, port, socket_opts, timeout),
+         :ok         <- Bolt.handshake(socket, sock),
+         :ok         <- Bolt.init(socket, sock, auth),
+         :ok         <- socket.setopts(sock, active: :once)
     do
-      {:ok, port}
+      {:ok, {sock, socket}}
     else
       {:error, %Boltex.Error{}} = error ->
         error
@@ -39,33 +44,33 @@ defmodule BoltexDBConnection.Connection do
   end
 
   @doc "Callback for DBConnection.checkout/1"
-  def checkout(port) do
-    case :inet.setopts(port, active: false) do
-      :ok    -> {:ok, port}
+  def checkout({sock, socket}) do
+    case socket.setopts(sock, active: false) do
+      :ok    -> {:ok, {sock, socket}}
       other  -> other
     end
   end
 
   @doc "Callback for DBConnection.checkin/1"
-  def checkin(port) do
-    case :inet.setopts(port, active: :once) do
-      :ok    -> {:ok, port}
+  def checkin({sock, socket}) do
+    case socket.setopts(sock, active: :once) do
+      :ok    -> {:ok, {sock, socket}}
       other  -> other
     end
   end
 
   @doc "Callback for DBConnection.handle_execute/1"
-  def handle_execute(%Query{statement: statement}, params, _opts, port) do
-    case Bolt.run_statement(:gen_tcp, port, statement, params) do
+  def handle_execute(%Query{statement: statement}, params, opts, {sock, socket}) do
+    case Bolt.run_statement(socket, sock, statement, params) do
       [{:success, _} | _] = data ->
-        {:ok, data, port}
+        {:ok, data, {sock, socket}}
 
       %Error{type: :cypher_error} = error ->
-        with :ok <- Bolt.ack_failure(:gen_tcp, port),
-        do:  {:error, error, port}
+        with :ok <- Bolt.ack_failure(socket, sock),
+        do:  {:error, error, {sock, socket}}
 
       other ->
-        {:disconnect, other, port}
+        {:disconnect, other, {sock, socket}}
     end
   end
 
@@ -81,8 +86,8 @@ defmodule BoltexDBConnection.Connection do
   end
   def handle_info(_, state), do: {:ok, state}
 
-  def disconnect(_err, sock) do
-    :gen_tcp.close sock
+  def disconnect(_err, {sock, socket}) do
+    socket.close sock
 
     :ok
   end

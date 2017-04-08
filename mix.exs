@@ -14,7 +14,7 @@ defmodule BoltexDbConnection.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger]]
+    [applications: [:logger, :db_connection]]
   end
 
   # Dependencies can be Hex packages:
@@ -29,7 +29,7 @@ defmodule BoltexDbConnection.Mixfile do
   defp deps do
     [
       {:db_connection, "~> 1.1"},
-      {:boltex, path: "../boltex"}
+      {:boltex, "~> 0.3.0"}
     ]
   end
 end

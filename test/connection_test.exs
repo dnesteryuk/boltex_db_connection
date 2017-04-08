@@ -13,13 +13,13 @@ defmodule Boltex.ConnectionTest do
 
   @tag :integration
   test "executes a query successfully" do
-    assert {:ok, pid} = DBConnection.start_link Connection, [host: "192.168.252.128", port: 7688, auth: {"neo4j", "password"}]
+    assert {:ok, pid} = DBConnection.start_link Connection, [host: "127.0.0.1", port: 7688, auth: {"neo4j", "password"}]
     query = %Query{statement: "MATCH (n) RETURN n"}
     assert {:ok, [{:success, _} | _]} = DBConnection.execute pid, query, %{}, []
   end
 
   test "handles failures gracefully" do
-    assert {:ok, pid} = DBConnection.start_link Connection, [host: "192.168.252.128", port: 7688, auth: {"neo4j", "wrong!"}]
+    assert {:ok, pid} = DBConnection.start_link Connection, [host: "127.0.0.1", port: 7688, auth: {"neo4j", "wrong!"}]
     query = %Query{statement: "MATCH (n) RETURN n"}
 
     log = capture_log fn ->
